@@ -9,7 +9,8 @@ import flatbuffers
 import copy
 from tensorflow.lite.python import schema_py_generated as schema_fb
 from tqdm import tqdm
-import sys
+
+import argparse
 
 class MyParseTflite(object):
     '''
@@ -268,8 +269,25 @@ class MyParseTflite(object):
                     self.__savefile(f'{self.save_path}/{self.model_name}/{op_name}/{key}{i}_{dtype}.bin', data)
                     np.savetxt(f'{self.save_path}/{self.model_name}/{op_name}/{key}{i}_{dtype}.txt', data, fmt='%4d', delimiter=',')
 
+def argpars():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tflite_path', type=str, required=True, help='The path to tflite model')
+    parser.add_argument('--model_name', type=str, default='model', required=False, help='Name of tflite model.')
+    parser.add_argument('--save_path', type=str, default='./', required=False, help='Path of saving data.')
+    parser.add_argument('--ignore_ops', type=list, default=[None], required=False, help='Specify which operators do not need to be exported, default [None].')
+    parser.add_argument('--is_saving_data', type=bool, default=False, required=False, help='whether to save data, default False.')
+    opt = parser.parse_args()
+    return opt
+
 def main():
-    extra = MyParseTflite(sys.argv[1])
+    opt = argpars()
+    extra = MyParseTflite(
+        tflite_path = opt.tflite_path,
+        model_name = opt.model_name,
+        save_path = opt.save_path,
+        ignore_ops = opt.ignore_ops,
+        is_saving_data = opt.is_saving_data,
+    )
     import pdb
     pdb.set_trace()
     # print(extra.ops_types)
