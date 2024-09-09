@@ -1,9 +1,10 @@
-#安装与使用
-##-安装-
+#  安装与使用
+## 安装
 ```cmd
 python setup.py install
 ```
 
+## 使用
 安装后，可以在命令窗口直接使用parse-lite命令去解析tflite模型。
 
 命令窗口键入:
