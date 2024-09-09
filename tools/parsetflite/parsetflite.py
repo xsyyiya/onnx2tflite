@@ -3,7 +3,7 @@ import re
 import os
 import datetime
 import numpy as np
-import torch
+# import torch
 import tensorflow as tf
 import flatbuffers
 import copy
