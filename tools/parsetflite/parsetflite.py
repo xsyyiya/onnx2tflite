@@ -48,30 +48,30 @@ class MyParseTflite(object):
         self.save_path = save_path
         self.model_name = model_name
         if is_saving_data:
-            self.__mkdir()
-            self.per_ops_out = self.__load_npy()
+            self._mkdir()
+            self.per_ops_out = self._load_npy()
 
-        self.model_buffer = self.__load() 
+        self.model_buffer = self._load() 
         self.interpreter = tf.lite.Interpreter(model_content=self.model_buffer)
         self.interpreter.allocate_tensors()
         self.tensor_details = self.interpreter.get_tensor_details()
         self.ignore_ops = ignore_ops
         self.ops_types = []
-        self.locations = self.__get_location_id()
+        self.locations = self._get_location_id()
         self.is_saving_data = is_saving_data 
 
-    def __mkdir(self):
+    def _mkdir(self):
         if not os.path.exists(f'{self.save_path}'):
             os.mkdir(f'{self.save_path}')
         if not os.path.exists(f'{self.save_path}/{self.model_name}'):
             os.mkdir(f'{self.save_path}/{self.model_name}')  #or use os.makedirs
 
-    def __load(self):
+    def _load(self):
         with open(self.tflite_path, 'rb') as f:
             model_buffer = f.read()
         return model_buffer
     
-    def __persist(self, s):
+    def _persist(self, s):
         if not os.path.exists(f'{self.save_path}/tmp'):
             os.mkdir(f'{self.save_path}/tmp')
         if not os.path.exists(f'{self.save_path}/tmp/{self.model_name}'):
@@ -79,7 +79,7 @@ class MyParseTflite(object):
         file_path = f'{self.save_path}/tmp/{self.model_name}/per_ops_out_{s}.npy'
         np.save(file_path, self.per_ops_out)
 
-    def __new_file(self, dir_path):
+    def _new_file(self, dir_path):
         listt = os.listdir(dir_path)
         if any(listt):
             listt.sort(key=lambda fn:os.path.getmtime(dir_path+'/'+fn))
@@ -89,17 +89,17 @@ class MyParseTflite(object):
         else:
             raise Exception("there is no temp files")
 
-    def __load_npy(self):
+    def _load_npy(self):
         per_ops_out = {}
         file_path = f'{self.save_path}/tmp/{self.model_name}'
         if os.path.exists(file_path):
-            npy_file_path = self.__new_file(file_path)
+            npy_file_path = self._new_file(file_path)
             per_ops_out = np.load(npy_file_path, allow_pickle=True).item()
 
         return per_ops_out 
     
-    def __get_location_id(self):     
-        data = self.__CreateDictFromFlatbuffer(self.model_buffer)
+    def _get_location_id(self):     
+        data = self._CreateDictFromFlatbuffer(self.model_buffer)
         op_codes = data['operator_codes']  #支持/注册的op
         subg = data['subgraphs'][0] #模型结构描述，具体的op构成
 
@@ -108,7 +108,7 @@ class MyParseTflite(object):
         for i, layer in enumerate(subg['operators']):
             op_idx = layer['opcode_index']
             op_code = op_codes[op_idx]['builtin_code']
-            layer_name = self.__BuiltinCodeToName(op_code) 
+            layer_name = self._BuiltinCodeToName(op_code) 
 
             #统计模型中用到的算子种类
             if layer_name not in self.ops_types:
@@ -130,19 +130,19 @@ class MyParseTflite(object):
                 
         return locations
 
-    def __BuiltinCodeToName(self, code):
+    def _BuiltinCodeToName(self, code):
         """Converts a builtin op code enum to a readable name."""
         for name, value in schema_fb.BuiltinOperator.__dict__.items():
             if value == code:
                 return name
         return None
 
-    def __CamelCaseToSnakeCase(self, camel_case_input):
+    def _CamelCaseToSnakeCase(self, camel_case_input):
         """Converts an identifier in CamelCase to snake_case."""
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", camel_case_input)
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
     
-    def __FlatbufferToDict(self, fb, preserve_as_numpy):
+    def _FlatbufferToDict(self, fb, preserve_as_numpy):
         if isinstance(fb, int) or isinstance(fb, float) or isinstance(fb, str):
             return fb
         elif hasattr(fb, "__dict__"):
@@ -150,33 +150,33 @@ class MyParseTflite(object):
             for attribute_name in dir(fb):
                 attribute = fb.__getattribute__(attribute_name)
                 if not callable(attribute) and attribute_name[0] != "_":
-                    snake_name = self.__CamelCaseToSnakeCase(attribute_name)
+                    snake_name = self._CamelCaseToSnakeCase(attribute_name)
                     preserve = True if attribute_name == "buffers" else preserve_as_numpy
-                    result[snake_name] = self.__FlatbufferToDict(attribute, preserve)
+                    result[snake_name] = self._FlatbufferToDict(attribute, preserve)
             return result
         elif isinstance(fb, np.ndarray):
             return fb if preserve_as_numpy else fb.tolist()
         elif hasattr(fb, "__len__"):
-            return [self.__FlatbufferToDict(entry, preserve_as_numpy) for entry in fb]
+            return [self._FlatbufferToDict(entry, preserve_as_numpy) for entry in fb]
         else:
             return fb
 
-    def __CreateDictFromFlatbuffer(self, buffer_data):
+    def _CreateDictFromFlatbuffer(self, buffer_data):
         model_obj = schema_fb.Model.GetRootAsModel(buffer_data, 0)
         model = schema_fb.ModelT.InitFromObj(model_obj)
-        return self.__FlatbufferToDict(model, preserve_as_numpy=False)
+        return self._FlatbufferToDict(model, preserve_as_numpy=False)
 
-    def __OutputsOffset(self, subgraph, j):
+    def _OutputsOffset(self, subgraph, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(subgraph._tab.Offset(8))
         if o != 0:
             a = subgraph._tab.Vector(o)
             return a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4)
         return 0
     
-    def __buffer_change_output_tensor_to(self, model_buffer, new_tensor_i):
+    def _buffer_change_output_tensor_to(self, model_buffer, new_tensor_i):
         
         root = schema_fb.Model.GetRootAsModel(model_buffer, 0)
-        output_tensor_index_offset = self.__OutputsOffset(root.Subgraphs(0), 0)
+        output_tensor_index_offset = self._OutputsOffset(root.Subgraphs(0), 0)
         
         # Flatbuffer scalars are stored in little-endian.
         new_tensor_i_bytes = bytes([
@@ -188,8 +188,8 @@ class MyParseTflite(object):
         # Replace the 4 bytes corresponding to the first output tensor index
         return model_buffer[:output_tensor_index_offset] + new_tensor_i_bytes + model_buffer[output_tensor_index_offset + 4:]
 
-    def __ch_out(self, idx, input_data:dict):
-        model_buffer = self.__buffer_change_output_tensor_to(self.model_buffer, idx)
+    def _ch_out(self, idx, input_data:dict):
+        model_buffer = self._buffer_change_output_tensor_to(self.model_buffer, idx)
         interpreter = tf.lite.Interpreter(model_content=model_buffer) 
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
@@ -224,26 +224,26 @@ class MyParseTflite(object):
 
                 for idx in self.locations[x]['out']:
                     if f'{idx}' not in self.per_ops_out.keys():
-                        output_data = self.__ch_out(idx, input_data) 
+                        output_data = self._ch_out(idx, input_data) 
                         self.per_ops_out[f'{idx}'] = output_data
 
-                self.__save_bin_txt(x)
+                self._save_bin_txt(x)
                 
                 #每完成10%节点后保存输出数据
                 if count/ops_num >= 0.1:
                     count_all += count
                     s = int(np.floor(count_all*100/ops_num))
                     count = 0
-                    self.__persist(s)
+                    self._persist(s)
 
             #保存所有节点输出数据
-            self.__persist(100)
+            self._persist(100)
     
-    def __savefile(self, fliename, data):    
+    def _savefile(self, fliename, data):    
          with open(fliename, 'wb') as f:
              f.write(data.squeeze())
 
-    def __check_data_dim(self, data):
+    def _check_data_dim(self, data):
         if data.size > 1:
             data = data.squeeze()
         else:
@@ -254,7 +254,7 @@ class MyParseTflite(object):
             data = data.reshape([-1, data.shape[-1]])
         return data
 
-    def __save_bin_txt(self, op_name):
+    def _save_bin_txt(self, op_name):
         for key in self.locations[op_name].keys():
             for i, idx in enumerate(self.locations[op_name][key]):
                 if idx is not None and idx != -1:
@@ -264,9 +264,9 @@ class MyParseTflite(object):
                         # print(f'op_name: {op_name}    key : {key}    idx: {idx} ')
                         data = self.interpreter.get_tensor(idx)
                     dtype = data.dtype
-                    data = self.__check_data_dim(data)
+                    data = self._check_data_dim(data)
 
-                    self.__savefile(f'{self.save_path}/{self.model_name}/{op_name}/{key}{i}_{dtype}.bin', data)
+                    self._savefile(f'{self.save_path}/{self.model_name}/{op_name}/{key}{i}_{dtype}.bin', data)
                     np.savetxt(f'{self.save_path}/{self.model_name}/{op_name}/{key}{i}_{dtype}.txt', data, fmt='%4d', delimiter=',')
 
 def argpars():
